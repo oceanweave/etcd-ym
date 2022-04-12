@@ -20,6 +20,7 @@ import (
 	"context"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -72,15 +73,19 @@ func (r *EtcdClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	svc.Name = etcdCluster.Name
 	svc.Namespace = etcdCluster.Namespace
 	// 返回的 op 代表执行状态，是预定义的常量（ "unchanged"  created" "updated" "updatedStatus" "updatedStatusOnly"）
-	op, err := ctrl.CreateOrUpdate(ctx, r.Client, &svc, func() error {
-		// 调谐函数必须在这里实现，实际上就是去拼装我们的 Service
-		MutateHeadlessService(&etcdCluster, &svc)
-		return controllerutil.SetControllerReference(&etcdCluster, &svc, r.Scheme)
+	// 此处改为重试逻辑：就是没调谐成功，就重试
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		op, err := ctrl.CreateOrUpdate(ctx, r.Client, &svc, func() error {
+			// 调谐函数必须在这里实现，实际上就是去拼装我们的 Service
+			MutateHeadlessService(&etcdCluster, &svc)
+			return controllerutil.SetControllerReference(&etcdCluster, &svc, r.Scheme)
+		})
+		log2.Info("CreateOrUpdate Service Result", "Service", op)
+		return err
 	})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	log2.Info("CreateOrUpdate Service Result", "Service", op)
 
 	// StatefulSet 调谐逻辑
 	var sts appsv1.StatefulSet
