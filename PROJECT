@@ -1,0 +1,16 @@
+domain: dfy.io
+layout:
+- go.kubebuilder.io/v3
+projectName: etcd-ym
+repo: github.com/oceanweave/etcd-ym
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: dfy.io
+  group: etcd
+  kind: EtcdCluster
+  path: github.com/oceanweave/etcd-ym/api/v1alpha1
+  version: v1alpha1
+version: "3"

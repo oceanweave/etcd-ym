@@ -1,0 +1,13 @@
+ k describe svc etcdcluster-sample
+
+ # Endpoints:         10.244.0.13:2380,10.244.0.15:2380,10.244.0.17:2380
+   Port:              client  2379/TCP
+   TargetPort:        2379/TCP
+   Endpoints:         10.244.0.13:2379,10.244.0.15:2379,10.244.0.17:2379
+
+# 测试连接
+ k exec -it etcdcluster-sample-0 /bin/sh
+
+etcdctl  --endpoints  10.244.0.13:2379,10.244.0.15:2379,10.244.0.17:2379 endpoint status --write-out=table
+
+etcdctl  --endpoints etcdcluster-sample-0.etcd:2379,etcdcluster-sample-1.etcd:2379,etcdcluster-sample-2.etcd:2379 endpoint status --write-out=table
