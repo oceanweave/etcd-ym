@@ -1,0 +1,16 @@
+apiVersion: etcd.dfy.io/v1alpha1
+kind: EtcdBackup
+metadata:
+  name: etcdbackup-sample
+spec:
+  # TODO(user): Add fields here
+#  endUrl: [<etcd-cluster-endpoints>] # 备份的节点 etcd 地址
+#  etcdUrl: "http://etcdcluster-sample-0.etcdcluster-sample.default.svc.cluster.local:2379"
+  etcdUrl: http://etcdcluster-sample-0.etcdcluster-sample.default.svc.cluster.local:2379
+  storageType: s3
+  s3:
+    path: "foo-bucket/snapshot.db"
+    s3Secret: "secret"
+  oss:
+    path: "foo-bucket/snapshot.db"
+    ossSecret: "secret"

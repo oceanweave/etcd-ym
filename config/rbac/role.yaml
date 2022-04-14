@@ -18,6 +18,26 @@ rules:
   - update
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods/status
+  verbs:
+  - get
+  - patchd
+  - update
+- apiGroups:
   - core.dfy.io
   resources:
   - services
@@ -29,6 +49,32 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - etcd.dfy.io
+  resources:
+  - etcdbackups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - etcd.dfy.io
+  resources:
+  - etcdbackups/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - etcd.dfy.io
+  resources:
+  - etcdbackups/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - etcd.dfy.io
   resources:

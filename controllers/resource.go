@@ -79,7 +79,7 @@ func MutateStatefulSet(cluster *etcdv1alpha1.EtcdCluster, sts *appsv1.StatefulSe
 				},
 			},
 			Spec: corev1.PodSpec{
-				Containers: newContainers(cluster),
+				Containers: newContainers(cluster), // 构建容器 调用下面的函数
 			},
 		},
 		//  volumeClaimTemplates:

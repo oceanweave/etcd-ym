@@ -1,0 +1,30 @@
+主要分为两大部分(创建和备份）
+一、创建 etcd 集群 etcdCluster
+    1. etcdCluster 会创建两个资源 service（headless） 和 statefulset
+        - statefulset 会提供固定的 pod 名称
+        - service headless 会提供域名解析
+        - 因此每个 pod 都有有个固定的解析地址  pod-name.service-name.svc.cluster.local
+        - statefulset 和 service 的创建引用 k8s 源码部署中的脚本 kubernetes/test/e2e/testing-manifests/statefulset/etcd
+        - 本代码 controllers/resource.go 部分为创建 statefulset 和 service
+二、备份 etccdbackup
+    1. 控制器部分逻辑
+        - controllers/etcdbackup_controller.go  controllers/action.go
+        - 调谐首先 获取状态 getState 其分为两个步骤
+            a. 获取真实 pod 状态（此 pod 是备份功能的pod）
+            b. 获取期望状态（这个从 etcdbackup crd 中获取），同时生成 备份 pod 的创建请求。
+        - 根据状态采取动作
+            a. 根据  etcdbackup 实例的状态 status，判断是否需要创建 pod，提交 pod 创建请求
+            b. 根据真实获取到的 pod 状态 status，判断是否成功，同时更新 etcdbackup 实例的状态 status
+            c. 以上动作是在 controllers/action.go 实现，对于不同的行为，不是设置不同的动作，而是设置相同的动作，
+                将不同的行为封装为不同事件，不同的事件调用统一动作 Execute 完成不同的行为
+    2. 生成备份所使用的的镜像
+        - cmd/backup/main.go pkg/file/s3.go Dockerfile
+        - 编写上面前两个文件，实现备份功能，未实现 oss 部分
+        - 最后利用 Dockerfile 生成镜像，将所生成的镜像修改 main 函数中的全局变量部分（备份镜像）
+        - 有两个坑：etcd 版本,采用下面两个包
+            - https://pkg.go.dev/go.etcd.io/etcd/client/v3#section-readme
+            - https://pkg.go.dev/go.etcd.io/etcd/etcdutl/v3
+        - 另外 dockerfile ENV 部分要分开写，不要写在 RUN 里面，容易出bug
+
+三、 TODO
+    1. 备份完成后，pod 显示 completed 但是 etcdbackup 实例并未更新状态，同时 pod 之后显示为 Back-off restarting failed container
