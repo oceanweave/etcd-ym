@@ -1,0 +1,20 @@
+apiVersion: etcd.dfy.io/v1alpha1
+kind: EtcdBackup
+metadata:
+  name: etcdbackup-sample
+spec:
+  # TODO(user): Add fields here
+#  endUrl: [<etcd-cluster-endpoints>] # 备份的节点 etcd 地址
+#  etcdUrl: "http://etcdcluster-sample-0.etcdcluster-sample.default.svc.cluster.local:2379"
+  etcdUrl: http://etcdcluster-sample-0.etcdcluster-sample.default.svc.cluster.local:2379
+  storageType: s3
+  s3:
+    # my-bucket/{{ .Namespce }}/{{ .Name }}/{{ .CreationTimestamp }}/snapshot.db
+    path: "dfyio/{{ .Namespace }}/{{ .Name }}/{{ .CreationTimestamp }}/snapshot.db"
+    endpoint: "play.min.io" # MINIO 的地址
+    secret: "minio-access-secret" # 包含 accessKeyID 与 secretAccessKey
+  oss:
+    path: "foo-bucket/snapshot.db"
+    ossSecret: "secret"
+
+# kubectl create secret generic minio-access-secret --from-literal=MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F  --from-literal=MINIO_SECRET=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG

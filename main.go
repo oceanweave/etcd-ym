@@ -93,7 +93,8 @@ func main() {
 	if err = (&controllers.EtcdBackupReconciler{
 		Client:      mgr.GetClient(),
 		Scheme:      mgr.GetScheme(),
-		BackupImage: backupImage, // 备份功能的镜像
+		BackupImage: backupImage,                                      // 备份功能的镜像
+		Recorder:    mgr.GetEventRecorderFor("etcdbackup-controller"), // 记得要初始化
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdBackup")
 		os.Exit(1)

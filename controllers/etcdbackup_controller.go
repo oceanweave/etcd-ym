@@ -19,10 +19,13 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"html/template"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -35,7 +38,9 @@ import (
 // EtcdBackupReconciler reconciles a EtcdBackup object
 type EtcdBackupReconciler struct {
 	client.Client
-	Scheme      *runtime.Scheme
+	Scheme *runtime.Scheme
+	// 添加事件记录其  event  这个是 describe 可看到的event
+	Recorder    record.EventRecorder // 记得要在 main 函数初始化
 	BackupImage string
 }
 
@@ -101,7 +106,10 @@ func (r *EtcdBackupReconciler) setStateDesired(state *backupState) error {
 	var desired backupStateContainer
 	// 根据 EtcdBackup 创建一个用于备份 etcd 的 Pod
 	// 创建 pod
-	pod := podforBackup(state.backup, r.BackupImage)
+	pod, err := podforBackup(state.backup, r.BackupImage)
+	if err != nil {
+		return err
+	}
 
 	// 配置 controller references
 	if err := controllerutil.SetControllerReference(state.backup, pod, r.Scheme); err != nil {
@@ -115,14 +123,26 @@ func (r *EtcdBackupReconciler) setStateDesired(state *backupState) error {
 
 // 根据要求 构建 pod 的yaml
 // 备份所使用的 pod
-func podforBackup(backup *etcdv1alpha1.EtcdBackup, image string) *corev1.Pod {
+func podforBackup(backup *etcdv1alpha1.EtcdBackup, image string) (*corev1.Pod, error) {
 	var secretRef *corev1.SecretEnvSource
 	var backupEndpoint, backupURL string
 	if backup.Spec.StorageType == etcdv1alpha1.BackupStorageTypeS3 {
 		backupEndpoint = backup.Spec.S3.Endpoint
 		// s3://bucket-name/object-name.db
+		// s3://my-bucket/{{ .Namespce }}/{{ .Name }}/{{ .CreationTimestamp }}/snapshot.db
+		// 此处 改为了 go模板形式
 		// 格式构建
-		backupURL = fmt.Sprintf("%s://%s", backup.Spec.StorageType, backup.Spec.S3.Path)
+		// 模板解析
+		tmpl, err := template.New("template").Parse(backup.Spec.S3.Path)
+		if err != nil {
+			return nil, err
+		}
+		// 解析成备份地址
+		var objectURL strings.Builder
+		if err := tmpl.Execute(&objectURL, backup); err != nil {
+			return nil, err
+		}
+		backupURL = fmt.Sprintf("%s://%s", backup.Spec.StorageType, objectURL.String())
 		secretRef = &corev1.SecretEnvSource{
 			LocalObjectReference: corev1.LocalObjectReference{
 				Name: backup.Spec.S3.Secret,
@@ -176,7 +196,7 @@ func podforBackup(backup *etcdv1alpha1.EtcdBackup, image string) *corev1.Pod {
 				},
 			},
 		},
-	}
+	}, nil
 }
 
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
@@ -221,17 +241,21 @@ func (r *EtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	case state.actual.pod == nil: // 当前还么有执行任务的 Pod
 		log2.Info("Backup Pod does not exists. Creating...")
 		action = &CreateObject{client: r.Client, obj: state.desired.pod} // 创建
+		// 记录事件 event
+		r.Recorder.Event(state.backup, corev1.EventTypeNormal, EventReasonSuccessfulCreate, fmt.Sprintf("Create Pod: %s", state.desired.pod.Name))
 	case state.actual.pod.Status.Phase == corev1.PodFailed: // Pod 执行失败
 		log2.Info("Backup Pod Failed.")
 		newBackup := state.backup.DeepCopy()
 		newBackup.Status.Phase = etcdv1alpha1.EtcdBackupPhaseFailed // 更改成备份失败
 		action = &PatchStatus{client: r.Client, original: state.backup, new: newBackup}
+		r.Recorder.Event(state.backup, corev1.EventTypeWarning, EventReasonBackupFailed, "Backup failed. See backup pod for detail information")
 	case state.actual.pod.Status.Phase == corev1.PodSucceeded: // Pod 执行成功
 		log2.Info("Backup Pod Succeed.")
 		newBackup := state.backup.DeepCopy()
 		newBackup.Status.Phase = etcdv1alpha1.EtcdBackupPhaseCompleted // 更改成备份成功
 		action = &PatchStatus{client: r.Client, original: state.backup, new: newBackup}
-	// 目前成功了 就是记录一下日志
+		r.Recorder.Event(state.backup, corev1.EventTypeNormal, EventReasonBackupSucceed, "Backup completed.")
+	// 目前成功了 就是记录一下日志 这个属于控制器的日志
 	case state.backup.Status.Phase == etcdv1alpha1.EtcdBackupPhaseFailed: // 失败了
 		log2.Info("Backup has failed. Ignoring...")
 	case state.backup.Status.Phase == etcdv1alpha1.EtcdBackupPhaseCompleted: // 成功了
