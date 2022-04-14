@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
+	"github.com/oceanweave/etcd-ym/api/v1alpha1"
 	"github.com/oceanweave/etcd-ym/pkg/file"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	//"go.etcd.io/etcd/snapshot"
@@ -26,6 +27,7 @@ func main() {
 	var (
 		backupTempDir      string
 		etcdURL            string
+		backupURL          string
 		dialTimeoutSeconds int64
 		timeoutSeconds     int64
 	)
@@ -33,6 +35,7 @@ func main() {
 	// os.TempDir() 创建一个 tmp 文件夹 tmp/
 	flag.StringVar(&backupTempDir, "backup-tmp-dir", os.TempDir(), "The diectory to temp place backup etcd cluster.")
 	flag.StringVar(&etcdURL, "etcd-url", "", "URL for backup etcd.")
+	flag.StringVar(&backupURL, "backup-url", "", "URL for backup etcd object storage.")
 	flag.Int64Var(&dialTimeoutSeconds, "dial-timeout-seconds", 5, "Timeout for dialing the Etcd.")
 	flag.Int64Var(&timeoutSeconds, "timeout-seconds", 60, "Timeout for Backup the Etcd.")
 	// 忘记解析了 一定要加上
@@ -64,14 +67,35 @@ func main() {
 	// 接下来就上传
 	// http://docs.minio.org.cn/docs/master/golang-client-quickstart-guide
 	// todo, 根据传递进来的参数判断初始化是 s3 还是 oss
-	endpoint := "play.min.io"
-	accessKeyID := "Q3AM3UQ867SPQQA43P2F"
-	secretAccessKey := "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"
-	s3Uploader := file.NewS3Uploader(endpoint, accessKeyID, secretAccessKey)
-	log.Info("Uploading snapshot...")
-	size, err := s3Uploader.Upload(ctx, localPath)
+
+	storageType, bucketName, objectName, err := file.ParseBackupURL(backupURL)
 	if err != nil {
-		panic(logErr(log, err, "failed to upload backup etcd"))
+		panic(logErr(log, err, "failed to parse backup storage path"))
 	}
-	log.WithValues("upload-size", size).Info("Backup Completed")
+	switch storageType {
+	case string(v1alpha1.BackupStorageTypeS3):
+		log.Info("Uploading snapshot...")
+		// 上传 etcd snapshot 到 远程存储 s3
+		size, err := handleS3(ctx, bucketName, objectName, localPath)
+		if err != nil {
+			panic(logErr(log, err, "failed to upload backup etcd"))
+		}
+		log.WithValues("upload-size", size).Info("Backup Completed")
+	case string(v1alpha1.BackupStorageTypeOSS):
+	default:
+		panic(logErr(log, fmt.Errorf("storage type error"), fmt.Sprintf("unknown stprage tuype:%v", storageType)))
+	}
+
+}
+
+func handleS3(ctx context.Context, bucketName, objectName, localPath string) (int64, error) {
+	//endpoint := "play.min.io"
+	//accessKeyID := "Q3AM3UQ867SPQQA43P2F"
+	//secretAccessKey := "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"
+	endpoint := os.Getenv("ENDPOINT")
+	accessKeyID := os.Getenv("MINIO_ACCESS_KEY")
+	secretAccessKey := os.Getenv("MINIO_SECRET")
+	s3Uploader := file.NewS3Uploader(endpoint, accessKeyID, secretAccessKey)
+	size, err := s3Uploader.Upload(ctx, localPath, bucketName, objectName)
+	return size, err
 }

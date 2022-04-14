@@ -28,3 +28,7 @@
 
 三、 TODO
     1. 备份完成后，pod 显示 completed 但是 etcdbackup 实例并未更新状态，同时 pod 之后显示为 Back-off restarting failed container
+
+小 tips：
+    - 可以用 git diff 文件名  查看该文件做的修改
+    - dockerfile 多阶段构建  docker build --target backup -t dfy007/etcd-operator-backup:v0.2.1 -f Dockerfile .

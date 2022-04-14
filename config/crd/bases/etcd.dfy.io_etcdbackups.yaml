@@ -52,16 +52,20 @@ spec:
                 type: object
               s3:
                 properties:
+                  endpoint:
+                    type: string
                   path:
                     type: string
-                  s3Secret:
+                  secret:
                     description: 'Secret Object: AcessKey AccessSecret'
                     type: string
                 required:
+                - endpoint
                 - path
-                - s3Secret
+                - secret
                 type: object
               storageType:
+                description: 为什么重命名？ 因为易读 具有含义
                 type: string
             required:
             - etcdUrl

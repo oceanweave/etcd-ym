@@ -116,18 +116,52 @@ func (r *EtcdBackupReconciler) setStateDesired(state *backupState) error {
 // 根据要求 构建 pod 的yaml
 // 备份所使用的 pod
 func podforBackup(backup *etcdv1alpha1.EtcdBackup, image string) *corev1.Pod {
+	var secretRef *corev1.SecretEnvSource
+	var backupEndpoint, backupURL string
+	if backup.Spec.StorageType == etcdv1alpha1.BackupStorageTypeS3 {
+		backupEndpoint = backup.Spec.S3.Endpoint
+		// s3://bucket-name/object-name.db
+		// 格式构建
+		backupURL = fmt.Sprintf("%s://%s", backup.Spec.StorageType, backup.Spec.S3.Path)
+		secretRef = &corev1.SecretEnvSource{
+			LocalObjectReference: corev1.LocalObjectReference{
+				Name: backup.Spec.S3.Secret,
+			},
+		}
+	} else {
+		// TODO 暂时还未实现 oss ，因此此处有 bug ，之后继续修改
+		//backupEndpoint = backup.Spec.S3.Endpoint
+		secretRef = &corev1.SecretEnvSource{
+			LocalObjectReference: corev1.LocalObjectReference{
+				Name: backup.Spec.OSS.OSSSecret,
+			},
+		}
+	}
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      backup.Name,
 			Namespace: backup.Namespace,
 		},
 		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyOnFailure, // 将重启策略设置为 失败重启
 			Containers: []corev1.Container{
 				{
 					Name:  "etcd-backup",
 					Image: image,
 					Args: []string{ // image 的 参数
 						"--etcd-url", backup.Spec.EtcdUrl,
+						"--backup-url", backupURL,
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "ENDPOINT",
+							Value: backupEndpoint,
+						},
+					},
+					EnvFrom: []corev1.EnvFromSource{
+						{
+							SecretRef: secretRef,
+						},
 					},
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
@@ -193,7 +227,7 @@ func (r *EtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		newBackup.Status.Phase = etcdv1alpha1.EtcdBackupPhaseFailed // 更改成备份失败
 		action = &PatchStatus{client: r.Client, original: state.backup, new: newBackup}
 	case state.actual.pod.Status.Phase == corev1.PodSucceeded: // Pod 执行成功
-		log2.Info("Backup Pod Failed.")
+		log2.Info("Backup Pod Succeed.")
 		newBackup := state.backup.DeepCopy()
 		newBackup.Status.Phase = etcdv1alpha1.EtcdBackupPhaseCompleted // 更改成备份成功
 		action = &PatchStatus{client: r.Client, original: state.backup, new: newBackup}
@@ -202,6 +236,8 @@ func (r *EtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log2.Info("Backup has failed. Ignoring...")
 	case state.backup.Status.Phase == etcdv1alpha1.EtcdBackupPhaseCompleted: // 成功了
 		log2.Info("Backup has completed. Ignoring...")
+	default:
+		log2.Info("调谐中...")
 	}
 
 	if action != nil {
@@ -217,6 +253,6 @@ func (r *EtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 func (r *EtcdBackupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&etcdv1alpha1.EtcdBackup{}).
-		Owns(&corev1.Pod{}).
+		Owns(&corev1.Pod{}). // 此处别忘了  Owns 才能持续 watch 进行调谐
 		Complete(r)
 }

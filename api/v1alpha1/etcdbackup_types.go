@@ -26,8 +26,12 @@ var (
 	EtcdBackupPhaseBackingUp EtcdBackupPhase = "BackingUp"
 	EtcdBackupPhaseCompleted EtcdBackupPhase = "Completed"
 	EtcdBackupPhaseFailed    EtcdBackupPhase = "Failed"
+
+	BackupStorageTypeS3  BackupStorageType = "s3"
+	BackupStorageTypeOSS BackupStorageType = "oss"
 )
 
+// 为什么重命名？ 因为易读 具有含义
 type BackupStorageType string
 type EtcdBackupPhase string
 
@@ -51,9 +55,10 @@ type BackupSource struct {
 }
 
 type S3BackupSource struct {
-	Path string `json:"path"`
+	Path     string `json:"path"`
+	Endpoint string `json:"endpoint"`
 	// Secret Object: AcessKey AccessSecret
-	S3Secret string `json:"s3Secret"`
+	Secret string `json:"secret"`
 }
 
 type OSSBackupSource struct {

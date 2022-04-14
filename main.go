@@ -37,9 +37,11 @@ import (
 )
 
 var (
-	scheme             = runtime.NewScheme()
-	setupLog           = ctrl.Log.WithName("setup")
-	defaultBackupImage = "dfy007/etcd-operator-backup:v0.0.4" // 镜像作用  备份并上传s3
+	scheme   = runtime.NewScheme()
+	setupLog = ctrl.Log.WithName("setup")
+	// dfy007/etcd-operator-backup:v0.0.4 是未优化版本 但可用
+	// dfy007/etcd-operator-backup:v0.2.1 是优化版本
+	defaultBackupImage = "dfy007/etcd-operator-backup:v0.2.1" // 镜像作用  备份并上传s3
 )
 
 func init() {
